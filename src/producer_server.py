@@ -2,13 +2,23 @@ from kafka import KafkaProducer
 import json
 import time
 
+from confluent_kafka.admin import AdminClient, NewTopic
 
 class ProducerServer(KafkaProducer):
 
+    existing_topics = set(list())
+    
     def __init__(self, input_file, topic, **kwargs):
         super().__init__(**kwargs)
         self.input_file = input_file
         self.topic = topic
+        
+        if self._topic_exists(self.topic) == False:
+            #print(self.topic)
+            ret = self.__create_topic()
+            if ret == 1:
+                #print(len(self.existing_topics))
+                ProducerServer.existing_topics.add(self.topic)
 
     def generate_data(self):
         with open(self.input_file) as f:
@@ -29,6 +39,48 @@ class ProducerServer(KafkaProducer):
 
     def __on_send_error(excp):
         log.error('Error while sending data from Producer', exc_info=excp)
+    
+    def _topic_exists(self, topic_name: str) -> bool:
+        if topic_name in ProducerServer.existing_topics:
+            return True
+        return False
+        
+    def __create_topic(self) -> int:
+        """Creates the producer topic if it does not already exist"""
+        try:
+            client = AdminClient({"bootstrap.servers": "bootstrap.servers": "PLAINTEXT://localhost:9092"})
+            topic_metadata = client.list_topics(timeout=200)
+            topic_check = self.topic in set(t.topic for t in iter(topic_metadata.topics.values()))
+            if  topic_check == True:
+                 return -1
+             
+            futures = client.create_topics(
+                [
+                    NewTopic(
+                        topic=self.topic,
+                        num_partitions=1,
+                        replication_factor=1
+                        #config={
+                           # "cleanup.policy": "delete",
+                          #  "compression.type": "lz4",
+                          #  "delete.retention.ms": "2000",
+                         #   "file.delete.delay.ms": "2000",
+                        #}
+                    )
+                ]
+            )
+            status = 1
+            for topic, future in futures.items():
+                try:
+                    future.result()
+                    logger.debug("topic created")  
+                except Exception as e:
+                    logger.fatal(f"failed to create topic {self.topic}: {e}")
+                    status = -1
+        except Exception as ex:
+            logger.warn(f"Error in create topic {self.topic}: {ex}")
+            status = -1
+        return status
     
     def dict_to_binary(self, json_dict):
         return json.dumps(json_dict).encode('utf8')

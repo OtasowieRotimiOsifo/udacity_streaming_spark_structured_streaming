@@ -8,8 +8,8 @@ def run_kafka_server():
     producer = producer_server.ProducerServer(
         input_file=input_file,
         topic="sf.crime.statistics.spark.streaming",
-        bootstrap_servers="localhost:9092",
-        client_id="socket.gethostname()"
+        bootstrap_servers="PLAINTEXT://localhost:9092",
+        client_id=None #"socket.gethostname()"
     )
 
     return producer
