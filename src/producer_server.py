@@ -2,7 +2,10 @@ from kafka import KafkaProducer
 import json
 import time
 
+import logging
+
 from confluent_kafka.admin import AdminClient, NewTopic
+logger = logging.getLogger(__name__)
 
 class ProducerServer(KafkaProducer):
 
@@ -14,7 +17,7 @@ class ProducerServer(KafkaProducer):
         self.topic = topic
         
         if self._topic_exists(self.topic) == False:
-            #print(self.topic)
+            print(self.topic)
             ret = self.__create_topic()
             if ret == 1:
                 #print(len(self.existing_topics))
@@ -24,7 +27,7 @@ class ProducerServer(KafkaProducer):
         with open(self.input_file) as f:
             json_data = json.load(f)
             for json_dict in json_data:
-                future = message = self.dict_to_binary(json_dict)
+                message = self.dict_to_binary(json_dict)
                 # Asynchronous by default
                 self.send(topic=self.topic, value=message).\
                 add_callback(self.__on_send_success).\
@@ -38,7 +41,7 @@ class ProducerServer(KafkaProducer):
         print(record_metadata.offset)
 
     def __on_send_error(excp):
-        log.error('Error while sending data from Producer', exc_info=excp)
+        logger.error('Error while sending data from Producer', exc_info=excp)
     
     def _topic_exists(self, topic_name: str) -> bool:
         if topic_name in ProducerServer.existing_topics:
@@ -48,7 +51,7 @@ class ProducerServer(KafkaProducer):
     def __create_topic(self) -> int:
         """Creates the producer topic if it does not already exist"""
         try:
-            client = AdminClient({"bootstrap.servers": "bootstrap.servers": "PLAINTEXT://localhost:9092"})
+            client = AdminClient({"bootstrap.servers": "localhost:9092"})
             topic_metadata = client.list_topics(timeout=200)
             topic_check = self.topic in set(t.topic for t in iter(topic_metadata.topics.values()))
             if  topic_check == True:
@@ -58,7 +61,7 @@ class ProducerServer(KafkaProducer):
                 [
                     NewTopic(
                         topic=self.topic,
-                        num_partitions=1,
+                        num_partitions=3,
                         replication_factor=1
                         #config={
                            # "cleanup.policy": "delete",
