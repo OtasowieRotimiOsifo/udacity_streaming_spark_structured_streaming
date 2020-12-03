@@ -7,23 +7,6 @@ from pyspark.sql import SparkSession
 from pyspark.sql.types import *
 import pyspark.sql.functions as psf
 
-schema =  StructType([StructField("crime_id",StringType(), True),
-                StructField("original_crime_type_name",StringType(), True), 
-                StructField("report_date",StringType(), True),
-                StructField("call_date",StringType(), True),
-                StructField("offense_date",StringType(), True),
-                StructField("call_time",StringType(), True),
-                StructField("call_date_time",TimestampType(), True),
-                StructField("disposition",StringType(), True),
-                StructField("address",StringType(), True),
-                StructField("city",StringType(), True),
-                StructField("state",StringType(), True),
-                StructField("agency_id",StringType(), True),
-                StructField("address_type",StringType(), True),
-                StructField("common_location",StringType(), True)
-              ])
-#schema = StructType(schema_items)
-
 def run_spark_job(spark):
 
     # TODO Create Spark Configuration
@@ -41,45 +24,63 @@ def run_spark_job(spark):
         .load()
 
     # Show schema for the incoming resources for checks
-    print("Schema display")
+    
+    #print("Schema display")
+    
     df.printSchema()
-
+    #schema = df.schema
+    #print(schema)
+    
     # TODO extract the correct column from the kafka input resources
     # Take only value and convert it to String
     #df.selectExpr("*", "(ColumnName AS customName)")
     #kafka_df = df.selectExpr("*", "CAST(value as STRING)")
     kafka_df = df.selectExpr("CAST(value as STRING)")
-    print("Got here")
+    #print("Got here")
+    
+    schema =  StructType([StructField("crime_id",StringType(), True),
+                StructField("original_crime_type_name",StringType(), True), 
+                StructField("report_date",StringType(), True),
+                StructField("call_date",StringType(), True),
+                StructField("offense_date",StringType(), True),
+                StructField("call_time",StringType(), True),
+                StructField("call_date_time",TimestampType(), True),
+                StructField("disposition",StringType(), True),
+                StructField("address",StringType(), True),
+                StructField("city",StringType(), True),
+                StructField("state",StringType(), True),
+                StructField("agency_id",StringType(), True),
+                StructField("address_type",StringType(), True),
+                StructField("common_location",StringType(), True)
+              ])
     service_table = kafka_df\
         .select(psf.from_json(psf.col('value'), schema).alias("DF"))\
         .select("DF.*")
 
-    print("Got here2")
-    # TODO select original_crime_type_name and disposition
+    #print("Got here2")
+    
     distinct_table = service_table.select("original_crime_type_name","disposition")
     
-    print("Got here3")
+    #print("Got here3")
     # count the number of original crime type
-    agg_df = (distinct_table.groupby("original_crime_type_name", "disposition",)
-              .count()
-              .sort("count", ascending=False)
+    spark.conf.set("spark.sql.streaming.metricsEnabled", "true")
+    agg_df = (distinct_table.groupby("original_crime_type_name", "disposition").count().sort("count", ascending=False)
              )
     
-    print("Got here4")
-    # TODO Q1. Submit a screen shot of a batch ingestion of the aggregation
-    agg_df.printSchema()
-    # TODO write output stream
+    #print("Got here4")
+    
     query_df_writer = agg_df \
                       .writeStream \
+                      .queryName("query_df_writer")\
                       .outputMode("Complete") \
                       .format("console") \
                       .start()
 
-    print("Got here5")
+    #print("Got here5")
     # TODO attach a ProgressReporter
     query_df_writer.awaitTermination()
 
-    print("Got here6")
+    #print("Got here6")
     # TODO get the right radio code json path
     #radio_code_json_filepath = "radio_code.json"
     radio_code_json_filepath = f"{Path(__file__).parents[0]}/radio_code.json"
@@ -93,7 +94,7 @@ def run_spark_job(spark):
                               .schema(radio_code_schema) \
                               .json(radio_code_json_filepath)
 
-    print("Got here7")
+    #print("Got here7")
     # clean up your data so that the column names match on radio_code_df and agg_df
     # we will want to join on the disposition code
     radio_code_df.printSchema()
@@ -101,19 +102,19 @@ def run_spark_job(spark):
     radio_code_df = radio_code_df.withColumnRenamed("disposition_code", "disposition")
    
     radio_code_df.printSchema()
-    print("Got here8") 
+    #print("Got here8") 
     # TODO join on disposition column
     join_query_df = agg_df.join(radio_code_df, "disposition")
 
-    print("Got here9")
+    #print("Got here9")
     join_query_df_writer = join_query_df \
                            .writeStream \
                            .format("console") \
                            .start()
     
-    print("Got here9a")
+    #print("Got here9a")
     join_query_df_writer.awaitTermination()
-    print("Got here10")
+    #print("Got here10")
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
