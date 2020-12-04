@@ -8,7 +8,7 @@ The image (png) files in the reports directory of this repo are screenshots that
 Below are the answers answers that were obtained from executing the files.
 ## Question 1
 How did changing values on the SparkSession property parameters affect the throughput and latency of the data?
-### Answwer
+### Answer
 Changing values of the SparkSession property parameters either increased or decreased the throughput metrics from the spark streaming sessions. One metric that was noticeable was processedRowsPerSecond. This metric was affected by the values of the spark session parameters.
 ## Question 2
 What were the 2-3 most efficient SparkSession property key/value pairs? Through testing multiple variations on values, how can you tell these were the most optimal?
