@@ -12,31 +12,23 @@ def run_spark_job(spark):
     # TODO Create Spark Configuration
     # Create Spark configurations with max offset of 200 per trigger
     # set up correct bootstrap server and port
+   
     df = spark \
         .readStream \
         .format("kafka") \
         .option("kafka.bootstrap.servers", "localhost:9092") \
         .option("subscribe", "sf.crime.statistics.topic") \
         .option("startingOffsets", "earliest") \
-        .option("maxRatePerPartition", 1000) \
-        .option("maxOffsetsPerTrigger", 2000) \
+        .option("maxOffsetsPerTrigger", 200) \
         .option("stopGracefullyOnShutdown", True) \
         .load()
 
     # Show schema for the incoming resources for checks
     
-    #print("Schema display")
-    
     df.printSchema()
-    #schema = df.schema
-    #print(schema)
     
-    # TODO extract the correct column from the kafka input resources
     # Take only value and convert it to String
-    #df.selectExpr("*", "(ColumnName AS customName)")
-    #kafka_df = df.selectExpr("*", "CAST(value as STRING)")
     kafka_df = df.selectExpr("CAST(value as STRING)")
-    #print("Got here")
     
     schema =  StructType([StructField("crime_id",StringType(), True),
                 StructField("original_crime_type_name",StringType(), True), 
@@ -57,17 +49,11 @@ def run_spark_job(spark):
         .select(psf.from_json(psf.col('value'), schema).alias("DF"))\
         .select("DF.*")
 
-    #print("Got here2")
-    
     distinct_table = service_table.select("original_crime_type_name","disposition")
     
-    #print("Got here3")
     # count the number of original crime type
     spark.conf.set("spark.sql.streaming.metricsEnabled", "true")
-    agg_df = (distinct_table.groupby("original_crime_type_name", "disposition").count().sort("count", ascending=False)
-             )
-    
-    #print("Got here4")
+    agg_df = (distinct_table.groupby("original_crime_type_name",       "disposition").count().sort("count", ascending=False))
     
     query_df_writer = agg_df \
                       .writeStream \
@@ -76,13 +62,8 @@ def run_spark_job(spark):
                       .format("console") \
                       .start()
 
-    #print("Got here5")
-    # TODO attach a ProgressReporter
     query_df_writer.awaitTermination()
-
-    #print("Got here6")
-    # TODO get the right radio code json path
-    #radio_code_json_filepath = "radio_code.json"
+    
     radio_code_json_filepath = f"{Path(__file__).parents[0]}/radio_code.json"
     
     radio_code_schema =  StructType([StructField("disposition_code",StringType(), False),
@@ -94,37 +75,34 @@ def run_spark_job(spark):
                               .schema(radio_code_schema) \
                               .json(radio_code_json_filepath)
 
-    #print("Got here7")
     # clean up your data so that the column names match on radio_code_df and agg_df
     # we will want to join on the disposition code
-    radio_code_df.printSchema()
-    # TODO rename disposition_code column to disposition
+   
     radio_code_df = radio_code_df.withColumnRenamed("disposition_code", "disposition")
    
-    radio_code_df.printSchema()
-    #print("Got here8") 
-    # TODO join on disposition column
     join_query_df = agg_df.join(radio_code_df, "disposition")
 
-    #print("Got here9")
     join_query_df_writer = join_query_df \
                            .writeStream \
                            .format("console") \
                            .start()
     
-    #print("Got here9a")
     join_query_df_writer.awaitTermination()
-    #print("Got here10")
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
-
-    # TODO Create Spark in Standalone mode
+    #.config("spark.sql.shuffle.partitions", 10) \
+    #    .config("spark.default.parallelism", 10000) \
+    #    .config("spark.kafka.streaming.maxRatePerPartition", 10) \
+   
     spark = SparkSession \
         .builder \
         .master("local[*]") \
         .appName("KafkaSparkStructuredStreaming") \
         .config("spark.ui.port",3000) \
+        .config("spark.sql.shuffle.partitions", 10) \
+        .config("spark.default.parallelism", 10000) \
+        .config("spark.kafka.streaming.maxRatePerPartition", 10) \
         .getOrCreate()
 
     logger.info("Spark started")
