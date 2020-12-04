@@ -1,7 +1,8 @@
 # SF Crime Project
 ## Project Overview
 In this project, I used real-world dataset, extracted from Kaggle, on San Francisco crime incidents, to perform statistical analyses using Apache Spark Structured Streaming. The project is a part of the Nano Degree in Data Streaming at Udacity.
-The files in the src directory in this repo constitute the python files that formed the programming part of the project.
+The files in the src directory in this repo constitute the python files that formed the programming part of the project. The data directory contains the data files for the project. The zip file should be unzipped first.
+
 # Results
 The image (png) files in the reports directory of this repo are screenshots that were taken while executing the python files, kafka and spark. 
 # Answer to Questions
