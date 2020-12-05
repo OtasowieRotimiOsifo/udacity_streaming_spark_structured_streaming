@@ -28,7 +28,8 @@ def run_spark_job(spark):
     df.printSchema()
     
     # Take only value and convert it to String
-    kafka_df = df.selectExpr("CAST(value as STRING)")
+    #kafka_df = df.selectExpr("CAST(value as STRING)")
+    kafka_df = df.selectExpr("CAST(timestamp as STRING)", "CAST(value as STRING)")
     
     schema =  StructType([StructField("crime_id",StringType(), True),
                 StructField("original_crime_type_name",StringType(), True), 
@@ -49,20 +50,22 @@ def run_spark_job(spark):
         .select(psf.from_json(psf.col('value'), schema).alias("DF"))\
         .select("DF.*")
 
-    distinct_table = service_table.select("original_crime_type_name","disposition")
-    
+    #distinct_table = service_table.select("original_crime_type_name","disposition")
+    distinct_table = service_table.select("original_crime_type_name","call_date_time", "disposition").withWatermark("call_date_time", "45 minutes")
     # count the number of original crime type
     spark.conf.set("spark.sql.streaming.metricsEnabled", "true")
-    agg_df = (distinct_table.groupby("original_crime_type_name",       "disposition").count().sort("count", ascending=False))
+    #agg_df = (distinct_table.groupby("original_crime_type_name",       "disposition").count().sort("count", ascending=False))
+    agg_df = distinct_table.groupby("original_crime_type_name",       psf.window("call_date_time", "45 minutes")).count()#.sort("count", ascending=False))
     
     query_df_writer = agg_df \
                       .writeStream \
                       .queryName("query_df_writer")\
                       .outputMode("Complete") \
                       .format("console") \
-                      .start()
-
-    query_df_writer.awaitTermination()
+                      .start() \
+                      .awaitTermination()
+                      
+    #query_df_writer.awaitTermination()
     
     radio_code_json_filepath = f"{Path(__file__).parents[0]}/radio_code.json"
     
@@ -85,16 +88,13 @@ def run_spark_job(spark):
     join_query_df_writer = join_query_df \
                            .writeStream \
                            .format("console") \
-                           .start()
+                           .start()\
+                           .awaitTermination()  
     
-    join_query_df_writer.awaitTermination()
-
+    #join_query_df_writer.awaitTermination()
+    
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
-    #.config("spark.sql.shuffle.partitions", 10) \
-    #    .config("spark.default.parallelism", 10000) \
-    #    .config("spark.kafka.streaming.maxRatePerPartition", 10) \
-   
     spark = SparkSession \
         .builder \
         .master("local[*]") \
@@ -104,7 +104,7 @@ if __name__ == "__main__":
         .config("spark.default.parallelism", 10000) \
         .config("spark.kafka.streaming.maxRatePerPartition", 10) \
         .getOrCreate()
-
+        
     logger.info("Spark started")
 
     run_spark_job(spark)
